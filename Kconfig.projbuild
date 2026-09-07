@@ -11,6 +11,13 @@ choice
         bool "micro-ROS over eProsima Micro XRCE-DDS"
     config  MICRO_ROS_ESP_EMBEDDEDRTPS_MIDDLEWARE
         bool "micro-ROS over embeddedRTPS (EXPERIMENTAL)"
+    config  MICRO_ROS_ESP_ZENOH_PICO_MIDDLEWARE
+        bool "micro-ROS over zenoh-pico (rmw_zenoh_pico, EXPERIMENTAL)"
+        help
+            Build rmw_zenoh_pico on zenoh-pico instead of Micro XRCE-DDS. The
+            node talks straight to a Zenoh router (rmw_zenohd or zenohd), so it
+            joins a ROS 2 graph that uses rmw_zenoh_cpp without an agent.
+            Both libraries come from the deps/ submodules of this component.
 endchoice
 
 ##################################
@@ -23,6 +30,11 @@ choice
         bool "WLAN interface"
     config  MICRO_ROS_ESP_NETIF_ENET
         bool "Ethernet interface"
+    config  MICRO_ROS_ESP_NETIF_NONE
+        bool "None (the application brings up its own network)"
+        help
+            Build no uros_*_netif source. The application owns WiFi, Ethernet
+            or USB networking itself; micro-ROS only needs a routable socket.
 if MICRO_ROS_ESP_XRCE_DDS_MIDDLEWARE
     config  MICRO_ROS_ESP_UART_TRANSPORT
         bool "Micro XRCE-DDS over UART. Check int32_publisher_custom_transport"

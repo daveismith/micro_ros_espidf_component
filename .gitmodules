@@ -1,0 +1,6 @@
+[submodule "deps/zenoh-pico"]
+	path = deps/zenoh-pico
+	url = git@github.com:daveismith/zenoh-pico.git
+[submodule "deps/rmw_zenoh_pico"]
+	path = deps/rmw_zenoh_pico
+	url = git@github.com:daveismith/rmw_zenoh_pico.git
