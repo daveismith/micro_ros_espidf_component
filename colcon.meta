@@ -78,6 +78,7 @@
                 "-DZ_FEATURE_AUTO_RECONNECT=0",
                 "-DFRAG_MAX_SIZE=2048",
                 "-DBATCH_UNICAST_SIZE=1024",
+                "-DZ_RUNTIME_IDLE_READ_TASK_SLEEP=10",
                 "-DZENOH_LOG=INFO"
             ]
         },
