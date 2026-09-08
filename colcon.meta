@@ -75,7 +75,7 @@
                 "-DZ_FEATURE_LIVELINESS=1",
                 "-DZ_FEATURE_INTEREST=1",
                 "-DZ_FEATURE_FRAGMENTATION=1",
-                "-DZ_FEATURE_AUTO_RECONNECT=1",
+                "-DZ_FEATURE_AUTO_RECONNECT=0",
                 "-DFRAG_MAX_SIZE=2048",
                 "-DBATCH_UNICAST_SIZE=1024"
             ]
