@@ -77,7 +77,8 @@
                 "-DZ_FEATURE_FRAGMENTATION=1",
                 "-DZ_FEATURE_AUTO_RECONNECT=0",
                 "-DFRAG_MAX_SIZE=2048",
-                "-DBATCH_UNICAST_SIZE=1024"
+                "-DBATCH_UNICAST_SIZE=1024",
+                "-DZENOH_LOG=INFO"
             ]
         },
         "rmw_zenoh_pico": {
