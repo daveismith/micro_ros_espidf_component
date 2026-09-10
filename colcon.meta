@@ -73,10 +73,12 @@
                 "-DZ_FEATURE_QUERY=1",
                 "-DZ_FEATURE_QUERYABLE=1",
                 "-DZ_FEATURE_LIVELINESS=1",
+                "-DZ_FEATURE_UNSTABLE_API=1",
+                "-DZ_FEATURE_ADVANCED_SUBSCRIPTION=1",
                 "-DZ_FEATURE_INTEREST=1",
                 "-DZ_FEATURE_FRAGMENTATION=1",
                 "-DZ_FEATURE_AUTO_RECONNECT=0",
-                "-DFRAG_MAX_SIZE=2048",
+                "-DFRAG_MAX_SIZE=65536",
                 "-DBATCH_UNICAST_SIZE=1024",
                 "-DZ_RUNTIME_IDLE_READ_TASK_SLEEP=10",
                 "-DZENOH_LOG=INFO"
