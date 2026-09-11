@@ -102,16 +102,27 @@ $(EXTENSIONS_DIR)/micro_ros_src/src:
 		for p in visualization_msgs stereo_msgs trajectory_msgs shape_msgs nav_msgs diagnostic_msgs actionlib_msgs; do \
 			touch src/common_interfaces/$$p/COLCON_IGNORE; \
 		done; \
-	fi; \
-	cp -rfL $(EXTRA_ROS_PACKAGES) src/extra_packages || :; \
-	test -f src/extra_packages/extra_packages.repos && cd src/extra_packages && vcs import --input extra_packages.repos || :;
+	fi;
+
+# The extra packages get their own stamp, keyed on every file under
+# $(EXTRA_ROS_PACKAGES). The copy used to sit inside the recipe above, whose
+# target is the src DIRECTORY -- which exists after the first build, so a
+# package added or edited later was never copied again without a full clean
+# (minutes of re-cloning). Now an edited .msg is enough to rerun colcon.
+EXTRA_PACKAGE_FILES := $(shell find $(EXTRA_ROS_PACKAGES) -type f 2>/dev/null)
+
+$(UROS_DIR)/.extra_packages_stamp: $(EXTRA_PACKAGE_FILES) | $(EXTENSIONS_DIR)/micro_ros_src/src
+	rm -rf $(UROS_DIR)/src/extra_packages; \
+	cp -rfL $(EXTRA_ROS_PACKAGES) $(UROS_DIR)/src/extra_packages || :; \
+	test -f $(UROS_DIR)/src/extra_packages/extra_packages.repos && cd $(UROS_DIR)/src/extra_packages && vcs import --input extra_packages.repos || :; \
+	touch $(UROS_DIR)/.extra_packages_stamp
 
 
 # A stamp file rather than the install directory itself: colcon creates
 # install/ as soon as the first package lands, so a partial build would
 # otherwise satisfy the target and the next make would archive an incomplete
 # workspace without rerunning colcon.
-$(UROS_DIR)/install/.colcon_built: $(EXTENSIONS_DIR)/esp32_toolchain.cmake $(EXTENSIONS_DIR)/micro_ros_dev/install $(EXTENSIONS_DIR)/micro_ros_src/src
+$(UROS_DIR)/install/.colcon_built: $(EXTENSIONS_DIR)/esp32_toolchain.cmake $(EXTENSIONS_DIR)/micro_ros_dev/install $(EXTENSIONS_DIR)/micro_ros_src/src $(UROS_DIR)/.extra_packages_stamp
 	cd $(UROS_DIR); \
 	unset AMENT_PREFIX_PATH; \
 	PATH="$(subst /opt/ros/$(ROS_DISTRO)/bin,,$(PATH))"; \
