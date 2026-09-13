@@ -118,6 +118,14 @@ $(UROS_DIR)/.extra_packages_stamp: $(EXTRA_PACKAGE_FILES) | $(EXTENSIONS_DIR)/mi
 	touch $(UROS_DIR)/.extra_packages_stamp
 
 
+# ROSIDL_GENERATOR_C_DISABLE_TYPE_DESCRIPTION_CODEGEN: Jazzy's generator emits a
+# type description per interface -- its fields, every type it refers to, and the
+# .msg source text -- as NON-const statics, so on the ESP32 they are .data in
+# internal DRAM: ~40 KB with the servo and LED types. Only rcl's type cache reads
+# them, and that is compiled in only with RCL_MICROROS_COMPLETE_IMPL, which this
+# build does not set. Disabled, they are empty const structs in flash. The type
+# hash is generated either way, and it is what the zenoh key expressions carry.
+#
 # A stamp file rather than the install directory itself: colcon creates
 # install/ as soon as the first package lands, so a partial build would
 # otherwise satisfy the target and the next make would archive an incomplete
@@ -141,6 +149,7 @@ $(UROS_DIR)/install/.colcon_built: $(EXTENSIONS_DIR)/esp32_toolchain.cmake $(EXT
 		-DTHIRDPARTY=ON \
 		-DBUILD_SHARED_LIBS=OFF \
 		-DBUILD_TESTING=OFF \
+		-DROSIDL_GENERATOR_C_DISABLE_TYPE_DESCRIPTION_CODEGEN=ON \
 		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 		-DCMAKE_TOOLCHAIN_FILE=$(EXTENSIONS_DIR)/esp32_toolchain.cmake \
 		-DCMAKE_VERBOSE_MAKEFILE=OFF \
