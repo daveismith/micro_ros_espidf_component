@@ -15,14 +15,9 @@ targets:
   - esp32p4
 dependencies:
   idf: ">=5.2"
-  espressif/esp_wifi_remote:
-    version: ">=0.10,<2.0"
-    rules:
-      - if: "target in [esp32p4]"
-  espressif/esp_hosted:
-    version: "~2"
-    rules:
-      - if: "target in [esp32p4]"
+  # Upstream pulls esp_wifi_remote and esp_hosted in on the ESP32-P4 here. This fork does
+  # not: the application owns its network (MICRO_ROS_ESP_NETIF_NONE), and whether the P4
+  # has a radio at all is the application's decision and its manifest's.
 files:
   use_gitignore: true
   exclude:

@@ -113,14 +113,17 @@ add_prebuilt_library(libmicroros-prebuilt ""
 
 add_dependencies(libmicroros-prebuilt libmicroros_project)
 
-set_target_properties(libmicroros-prebuilt PROPERTIES IMPORTED_LOCATION ${COMPONENT_DIR}/libmicroros.a)
-target_include_directories(libmicroros-prebuilt INTERFACE ${COMPONENT_DIR}/include)
+# The library and headers compiled for THIS target: libmicroros.mk keys them by IDF_TARGET
+# under out/<target>, so an S3 and a P4 build from one checkout never link each other's.
+set(MICROROS_OUT_DIR "${COMPONENT_DIR}/out/${IDF_TARGET}")
+set_target_properties(libmicroros-prebuilt PROPERTIES IMPORTED_LOCATION ${MICROROS_OUT_DIR}/libmicroros.a)
+target_include_directories(libmicroros-prebuilt INTERFACE ${MICROROS_OUT_DIR}/include)
 
-file(GLOB include_folders LIST_DIRECTORIES true CONFIGURE_DEPENDS ${COMPONENT_DIR}/include/*)
+file(GLOB include_folders LIST_DIRECTORIES true CONFIGURE_DEPENDS ${MICROROS_OUT_DIR}/include/*)
 foreach(include_folder ${include_folders})
     if(IS_DIRECTORY ${include_folder})
         get_filename_component(folder_name ${include_folder} NAME)
-        target_include_directories(libmicroros-prebuilt INTERFACE ${COMPONENT_DIR}/include/${folder_name})
+        target_include_directories(libmicroros-prebuilt INTERFACE ${MICROROS_OUT_DIR}/include/${folder_name})
     endif()
 endforeach()
 
@@ -144,7 +147,7 @@ add_dependencies(${COMPONENT_LIB} libmicroros-prebuilt)
 target_link_libraries(${COMPONENT_LIB} INTERFACE libmicroros-prebuilt)
 
 set_directory_properties( PROPERTIES ADDITIONAL_CLEAN_FILES
-    "${COMPONENT_DIR}/include;${COMPONENT_DIR}/micro_ros_dev;${COMPONENT_DIR}/micro_ros_src;${COMPONENT_DIR}/esp32_toolchain.cmake" )
+    "${MICROROS_OUT_DIR};${COMPONENT_DIR}/micro_ros_dev;${COMPONENT_DIR}/micro_ros_src" )
 
 add_custom_target(clean-microros COMMAND ${submake} -f libmicroros.mk clean
                             WORKING_DIRECTORY ${COMPONENT_DIR})

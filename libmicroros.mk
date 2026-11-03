@@ -1,6 +1,16 @@
 EXTENSIONS_DIR = $(shell pwd)
 UROS_DIR = $(EXTENSIONS_DIR)/micro_ros_src
 BUILD_DIR ?= $(EXTENSIONS_DIR)/build
+IDF_TARGET ?= esp32
+
+# Everything compiled FOR the chip is keyed by target under out/<target>: the generated
+# toolchain file, colcon's build and install trees, libmicroros.a and the headers. One
+# checkout can then build an Xtensa and a RISC-V firmware without either linking the
+# other's library (which is what happened when all of it sat in this directory). What is
+# shared -- the host ament in micro_ros_dev/ and the ~25 cloned packages in
+# micro_ros_src/src -- is target-neutral and cloned once.
+OUT_DIR = $(EXTENSIONS_DIR)/out/$(IDF_TARGET)
+TOOLCHAIN = $(OUT_DIR)/esp32_toolchain.cmake
 
 DEBUG ?= 0
 
@@ -26,24 +36,41 @@ COMMON_CMAKE_ARGS = -DPython3_EXECUTABLE=$(MICROROS_PYTHON) -DCMAKE_POLICY_VERSI
 # The Python minor version, for the workspace's site-packages path below.
 PYVER := $(shell $(MICROROS_PYTHON) -c 'import sys; print("%d.%d" % sys.version_info[:2])')
 
-all: $(EXTENSIONS_DIR)/libmicroros.a
+all: $(OUT_DIR)/libmicroros.a
 
 clean:
+	rm -rf $(EXTENSIONS_DIR)/out; \
 	rm -rf $(EXTENSIONS_DIR)/libmicroros.a; \
 	rm -rf $(EXTENSIONS_DIR)/include; \
 	rm -rf $(EXTENSIONS_DIR)/esp32_toolchain.cmake; \
 	rm -rf $(EXTENSIONS_DIR)/micro_ros_dev; \
 	rm -rf $(EXTENSIONS_DIR)/micro_ros_src;
 
-$(EXTENSIONS_DIR)/esp32_toolchain.cmake: $(EXTENSIONS_DIR)/esp32_toolchain.cmake.in
-	rm -f $(EXTENSIONS_DIR)/esp32_toolchain.cmake; \
+# What the toolchain file is generated from, recorded so that a change in any of it --
+# the compiler (an IDF update), the target, the build directory whose sdkconfig.cmake it
+# includes -- regenerates the file. It used to depend on the template alone, so the first
+# build's compiler and target were baked in for good. Written only when the content
+# differs, so an unchanged build does not rebuild the library.
+$(OUT_DIR)/toolchain.vars: FORCE
+	@mkdir -p $(OUT_DIR); \
+	printf 'X_CC=%s\nX_CXX=%s\nIDF_TARGET=%s\nIDF_PATH=%s\nBUILD_DIR=%s\n' \
+		'$(X_CC)' '$(X_CXX)' '$(IDF_TARGET)' '$(IDF_PATH)' '$(BUILD_DIR)' > $@.tmp; \
+	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
+
+FORCE:
+
+# NB: colcon's per-package CMake caches under $(OUT_DIR)/build keep the flags the toolchain
+# file applied first (MICROROS_TOOLCHAIN_FLAGS_APPLIED), so a changed compiler within one
+# target still wants `rm -rf out/<target>/build` before the rebuild.
+$(TOOLCHAIN): $(EXTENSIONS_DIR)/esp32_toolchain.cmake.in $(OUT_DIR)/toolchain.vars
+	rm -f $(TOOLCHAIN); \
 	cat $(EXTENSIONS_DIR)/esp32_toolchain.cmake.in | \
 		sed "s/@CMAKE_C_COMPILER@/$(subst /,\/,$(X_CC))/g" | \
 		sed "s/@CMAKE_CXX_COMPILER@/$(subst /,\/,$(X_CXX))/g" | \
 		sed "s/@IDF_TARGET@/$(subst /,\/,$(IDF_TARGET))/g" | \
 		sed "s/@IDF_PATH@/$(subst /,\/,$(IDF_PATH))/g" | \
 		sed "s/@BUILD_CONFIG_DIR@/$(subst /,\/,$(BUILD_DIR)/config)/g" \
-		> $(EXTENSIONS_DIR)/esp32_toolchain.cmake
+		> $(TOOLCHAIN)
 
 $(EXTENSIONS_DIR)/micro_ros_dev/install:
 	rm -rf micro_ros_dev; \
@@ -130,16 +157,18 @@ $(UROS_DIR)/.extra_packages_stamp: $(EXTRA_PACKAGE_FILES) | $(EXTENSIONS_DIR)/mi
 # install/ as soon as the first package lands, so a partial build would
 # otherwise satisfy the target and the next make would archive an incomplete
 # workspace without rerunning colcon.
-$(UROS_DIR)/install/.colcon_built: $(EXTENSIONS_DIR)/esp32_toolchain.cmake $(EXTENSIONS_DIR)/micro_ros_dev/install $(EXTENSIONS_DIR)/micro_ros_src/src $(UROS_DIR)/.extra_packages_stamp
+$(OUT_DIR)/install/.colcon_built: $(TOOLCHAIN) $(EXTENSIONS_DIR)/micro_ros_dev/install $(EXTENSIONS_DIR)/micro_ros_src/src $(UROS_DIR)/.extra_packages_stamp
 	cd $(UROS_DIR); \
 	unset AMENT_PREFIX_PATH; \
 	PATH="$(subst /opt/ros/$(ROS_DISTRO)/bin,,$(PATH))"; \
 	. ../micro_ros_dev/install/local_setup.sh; \
-	export AMENT_PREFIX_PATH="$(UROS_DIR)/install$${AMENT_PREFIX_PATH:+:$$AMENT_PREFIX_PATH}"; \
-	export CMAKE_PREFIX_PATH="$(UROS_DIR)/install$${CMAKE_PREFIX_PATH:+:$$CMAKE_PREFIX_PATH}"; \
-	export PYTHONPATH="$(UROS_DIR)/install/lib/python$(PYVER)/site-packages$${PYTHONPATH:+:$$PYTHONPATH}"; \
+	export AMENT_PREFIX_PATH="$(OUT_DIR)/install$${AMENT_PREFIX_PATH:+:$$AMENT_PREFIX_PATH}"; \
+	export CMAKE_PREFIX_PATH="$(OUT_DIR)/install$${CMAKE_PREFIX_PATH:+:$$CMAKE_PREFIX_PATH}"; \
+	export PYTHONPATH="$(OUT_DIR)/install/lib/python$(PYVER)/site-packages$${PYTHONPATH:+:$$PYTHONPATH}"; \
 	if [ "$(MIDDLEWARE)" = "zenohpico" ]; then export RMW_IMPLEMENTATION=rmw_zenoh_pico; fi; \
-	colcon build \
+	colcon --log-base $(OUT_DIR)/log build \
+		--build-base $(OUT_DIR)/build \
+		--install-base $(OUT_DIR)/install \
 		--merge-install \
 		--packages-ignore-regex=.*_cpp \
 		--metas $(EXTENSIONS_DIR)/colcon.meta $(APP_COLCON_META) \
@@ -151,22 +180,22 @@ $(UROS_DIR)/install/.colcon_built: $(EXTENSIONS_DIR)/esp32_toolchain.cmake $(EXT
 		-DBUILD_TESTING=OFF \
 		-DROSIDL_GENERATOR_C_DISABLE_TYPE_DESCRIPTION_CODEGEN=ON \
 		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
-		-DCMAKE_TOOLCHAIN_FILE=$(EXTENSIONS_DIR)/esp32_toolchain.cmake \
+		-DCMAKE_TOOLCHAIN_FILE=$(TOOLCHAIN) \
 		-DCMAKE_VERBOSE_MAKEFILE=OFF \
         -DIDF_INCLUDES='${IDF_INCLUDES}' \
 		-DCMAKE_C_STANDARD=$(C_STANDARD) \
 		-DUCLIENT_C_STANDARD=$(C_STANDARD) \
 		$(COMMON_CMAKE_ARGS) \
-	&& touch $(UROS_DIR)/install/.colcon_built;
+	&& touch $(OUT_DIR)/install/.colcon_built;
 
 # libzenohpico.a is not extracted like the others: it holds ~27 members with
 # the same basename (tcp.c.obj, system.c.obj, ...) from different directories,
 # and extracting into one folder would silently keep only the last of each.
 # It is merged whole with an ar MRI script instead; duplicate member names
 # inside one archive are fine for the linker.
-$(EXTENSIONS_DIR)/libmicroros.a: $(UROS_DIR)/install/.colcon_built
-	mkdir -p $(UROS_DIR)/libmicroros; cd $(UROS_DIR)/libmicroros; \
-	for file in $$(find $(UROS_DIR)/install/lib/ -name '*.a' ! -name 'libzenohpico.a'); do \
+$(OUT_DIR)/libmicroros.a: $(OUT_DIR)/install/.colcon_built
+	rm -rf $(OUT_DIR)/libmicroros; mkdir -p $(OUT_DIR)/libmicroros; cd $(OUT_DIR)/libmicroros; \
+	for file in $$(find $(OUT_DIR)/install/lib/ -name '*.a' ! -name 'libzenohpico.a'); do \
 		folder=$$(echo $$file | sed -E "s/(.+)\/(.+).a/\2/"); \
 		mkdir -p $$folder; cd $$folder; $(X_AR) x $$file; \
 		for f in *; do \
@@ -175,11 +204,11 @@ $(EXTENSIONS_DIR)/libmicroros.a: $(UROS_DIR)/install/.colcon_built
 		cd ..; rm -rf $$folder; \
 	done ; \
 	$(X_AR) rc -s libmicroros.a *.obj; \
-	if [ -f $(UROS_DIR)/install/lib/libzenohpico.a ]; then \
-		printf 'open libmicroros.a\naddlib %s\nsave\nend\n' $(UROS_DIR)/install/lib/libzenohpico.a | $(X_AR) -M; \
+	if [ -f $(OUT_DIR)/install/lib/libzenohpico.a ]; then \
+		printf 'open libmicroros.a\naddlib %s\nsave\nend\n' $(OUT_DIR)/install/lib/libzenohpico.a | $(X_AR) -M; \
 		$(X_AR) -s libmicroros.a; \
 	fi; \
-	cp libmicroros.a $(EXTENSIONS_DIR); \
+	cp libmicroros.a $(OUT_DIR); \
 	cd ..; rm -rf libmicroros; \
-	rm -rf $(EXTENSIONS_DIR)/include; \
-	cp -R $(UROS_DIR)/install/include $(EXTENSIONS_DIR)/include;
+	rm -rf $(OUT_DIR)/include; \
+	cp -R $(OUT_DIR)/install/include $(OUT_DIR)/include;
